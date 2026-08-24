@@ -46,20 +46,56 @@
     return '<g transform="' + t + '">' + SUIT_ART[suit] + '</g>';
   }
 
-  /* Court cards get a framed panel, a monogram and a rank device rather than
-     a portrait: at 50px wide a figure turns to mud, but a frame reads. */
+  /* Court figures.
+     A real court portrait is unreadable at 50px wide, so these are bold
+     half-length silhouettes: clothing and hair as solid suit-coloured masses,
+     the face as cream negative space. Everything is sized to survive being
+     shrunk to a thumbnail; the rank itself is carried by the corner index, so
+     no letter competes with the figure. */
+  function figure(rank) {
+    var robe = '<path d="M27 119c0-20 10-31 23-31s23 11 23 31z"/>';   /* solid mass */
+    var out;
+
+    if (rank === 13) {                                    /* King */
+      out = robe +
+        '<path class="paper" d="M35 56c0 24 6 36 15 39 9-3 15-15 15-39z"/>' +   /* beard */
+        '<ellipse class="paper" cx="50" cy="53" rx="12.5" ry="13"/>' +          /* face  */
+        '<path d="M42 62c3 2 13 2 16 0-2 4-14 4-16 0z"/>' +                     /* moustache */
+        '<path d="M34 44V24l8 9 8-14 8 14 8-9v20z"/>' +                         /* crown */
+        '<rect x="33" y="42" width="34" height="6" rx="1.8"/>' +
+        '<path d="M48.6 20h2.8v-4h2.2v-2.6h-2.2V9h-2.8v4.4h-2.2V16h2.2z"/>';     /* cross */
+    } else if (rank === 12) {                             /* Queen */
+      out = robe +
+        '<path class="paper" d="M33 50c-6 26-2 43 4 49h26c6-6 10-23 4-49z"/>' + /* hair  */
+        '<ellipse class="paper" cx="50" cy="53" rx="11.5" ry="12.5"/>' +        /* face  */
+        '<path d="M46 62c2 1.6 6 1.6 8 0-1.4 3-6.6 3-8 0z"/>' +                 /* mouth */
+        '<path d="M34 44v-9l5 4 4-8 4 6 3-7 3 7 4-6 4 8 5-4v9z"/>' +            /* tiara */
+        '<circle cx="50" cy="24" r="2.6"/>' +
+        '<path d="M41 95h18l-2 8H43z"/>';                                       /* bodice */
+    } else {                                              /* Jack */
+      out = robe +
+        '<path class="paper" d="M31 88c6 7 32 7 38 0v7c-6 7-32 7-38 0z"/>' +    /* ruff  */
+        '<ellipse class="paper" cx="50" cy="57" rx="11.5" ry="12.5"/>' +        /* face  */
+        '<path d="M46 66c2 1.6 6 1.6 8 0-1.4 3-6.6 3-8 0z"/>' +                 /* mouth */
+        '<path d="M36 49c0-15 6-22 14-22s14 7 14 22z"/>' +                      /* cap   */
+        '<path d="M61 36c4-9 11-14 17-14-2 8-7 15-13 18-2 1-5-1-4-4z"/>';       /* plume */
+    }
+
+    var ey = rank === 11 ? 55 : 51;
+    return '<g class="fig">' + out +
+           '<circle class="eye" cx="46" cy="' + ey + '" r="1.6"/>' +
+           '<circle class="eye" cx="54" cy="' + ey + '" r="1.6"/>' +
+           '<path class="eye" d="M49.4 ' + (ey + 2.5) + 'h1.2v4.5h-1.2z"/>' +   /* nose */
+           '</g>';
+  }
+
   function court(rank, suit) {
-    var letter = RANK_CH[rank - 1];
-    var device =
-      rank === 13 ? '<path d="M34 40l5 11 6-13 5 13 6-11 3 15H31z" class="dev"/>' :          /* crown  */
-      rank === 12 ? '<path d="M50 36l4 9 9 2-6 7 1 9-8-4-8 4 1-9-6-7 9-2z" class="dev"/>' :  /* star   */
-                    '<path d="M41 32h3.4v30H41z M44.4 33l17 6.5-17 6.5z" class="dev"/>';      /* pennant */
     return (
       '<rect class="panel" x="21" y="27" width="58" height="94" rx="7"/>' +
-      '<rect class="panel-in" x="25.5" y="31.5" width="49" height="85" rx="4.5"/>' +
-      '<g class="dev-g" transform="translate(0,4)">' + device + '</g>' +
-      '<text class="court" x="50" y="86" text-anchor="middle">' + letter + '</text>' +
-      suitMark(suit, 50, 104, 20, false)
+      '<rect class="panel-in" x="24" y="30" width="52" height="88" rx="5"/>' +
+      '<g clip-path="url(#courtclip)">' + figure(rank) + '</g>' +
+      suitMark(suit, 30, 37, 13, false) +
+      suitMark(suit, 70, 111, 13, true)
     );
   }
 
@@ -96,6 +132,7 @@
      carrying their own <defs> would mean 52 elements sharing an id). */
   function defsSVG() {
     return '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>' +
+             '<clipPath id="courtclip"><rect x="24" y="30" width="52" height="88" rx="5"/></clipPath>' +
              '<pattern id="latA" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">' +
                '<rect width="14" height="14" class="b-bg"/>' +
                '<rect width="6" height="14" class="b-pink"/>' +

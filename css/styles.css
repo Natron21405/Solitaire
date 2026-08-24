@@ -140,8 +140,13 @@ html, body {
 .art { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .bg  { fill: var(--cream); stroke: var(--cream-edge); stroke-width: 1.2; }
 
-.card.red  .art { fill: var(--rose); }
-.card.black .art { fill: var(--sage); }
+.card.red  .art { fill: var(--rose); color: var(--rose); }
+.card.black .art { fill: var(--sage); color: var(--sage); }
+
+/* Court figures: clothing and crowns are solid suit colour; face, beard, hair
+   and ruff are cream so they read as separate shapes against the robe. */
+.paper { fill: var(--cream); stroke: currentColor; stroke-width: 1.6; }
+.eye   { fill: currentColor; }
 .card.red  .bg, .card.black .bg { fill: var(--cream); stroke: var(--cream-edge); }
 
 .idx   { font: 800 25px/1 -apple-system, "Helvetica Neue", Arial, sans-serif; letter-spacing: -1.2px; }

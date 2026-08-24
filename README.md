@@ -78,8 +78,11 @@ stock is empty and hands the job to the solver otherwise.
 same artwork is crisp at 50px on a phone and 200px on a tablet. Suits are
 paths rather than the Unicode characters ♠♥♣♦, which render as colour emoji on
 some iOS versions and change proportions between platforms. Numbers use the
-traditional pip layouts with the lower half rotated; courts get a framed panel
-and a rank device, since a portrait turns to mud at 50px wide.
+traditional pip layouts with the lower half rotated. Courts are bold
+half-length figures — clothing and crowns as solid suit-coloured masses, face,
+beard, hair and ruff as cream — drawn so the three stay distinguishable when
+shrunk to a thumbnail: the King has a cross-topped crown and a full beard, the
+Queen a wide tiara and long hair, the Jack a plumed cap and a ruff.
 
 Two rendering traps are worth remembering, both of which broke the cards once:
 
