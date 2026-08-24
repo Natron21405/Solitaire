@@ -180,6 +180,64 @@
     return true;
   };
 
+  /* ---------- generic move interface (used by drag, and by hints) --------
+     src  = {kind:'waste'} | {kind:'tableau', pile, idx} | {kind:'foundation', suit}
+     dest = {kind:'tableau', pile} | {kind:'foundation', suit}                */
+
+  Game.prototype.srcCard = function (src) {
+    var s = this.s;
+    if (src.kind === 'waste') return s.waste.length ? s.waste[s.waste.length - 1] : -1;
+    if (src.kind === 'foundation') return s.fnd[src.suit] ? src.suit * 13 + (s.fnd[src.suit] - 1) : -1;
+    if (src.kind === 'tableau') {
+      var u = s.up[src.pile];
+      return (src.idx >= 0 && src.idx < u.length) ? u[src.idx] : -1;
+    }
+    return -1;
+  };
+
+  /* The cards that travel together — a tableau run moves as a unit. */
+  Game.prototype.srcRun = function (src) {
+    if (src.kind !== 'tableau') {
+      var c = this.srcCard(src);
+      return c < 0 ? [] : [c];
+    }
+    return this.s.up[src.pile].slice(src.idx);
+  };
+
+  Game.prototype.canMove = function (src, dest) {
+    var s = this.s, card = this.srcCard(src);
+    if (card < 0) return false;
+
+    if (dest.kind === 'foundation') {
+      if (src.kind === 'foundation') return false;
+      // only a single, fully exposed card may go to a foundation
+      if (src.kind === 'tableau' && src.idx !== s.up[src.pile].length - 1) return false;
+      return SUIT(card) === dest.suit && S.canGoToFoundation(s, card);
+    }
+    if (src.kind === 'tableau' && src.pile === dest.pile) return false;
+    return S.canStackOnTableau(card, this.topOf(dest.pile));
+  };
+
+  Game.prototype.doMove = function (src, dest) {
+    if (!this.canMove(src, dest)) return false;
+    var s = this.s, moved = this.srcRun(src);
+    this.snapshot();
+    if (src.kind === 'waste') {
+      S.applyMove(s, dest.kind === 'foundation' ? { t: 'wf', draws: 0 }
+                                                : { t: 'wt', draws: 0, to: dest.pile });
+    } else if (src.kind === 'foundation') {
+      S.applyMove(s, { t: 'ft', suit: src.suit, to: dest.pile });
+    } else if (dest.kind === 'foundation') {
+      S.applyMove(s, { t: 'tf', from: src.pile });
+    } else {
+      S.applyMove(s, { t: 'tt', from: src.pile, idx: src.idx, to: dest.pile });
+    }
+    this.moveCount++;
+    this.lastMoved = moved;
+    this.checkWon();
+    return true;
+  };
+
   /* One step of autocomplete: send the lowest available card home. Called
      repeatedly by the UI so the finish animates card by card. */
   Game.prototype.autocompleteStep = function () {

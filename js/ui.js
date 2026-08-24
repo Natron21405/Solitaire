@@ -5,6 +5,7 @@
   'use strict';
 
   var S = window.KSolver, D = window.KDeal, G = window.KGame, ST = window.KStats;
+  var ART = window.KCardArt;
   var RANK = S.RANK, SUIT = S.SUIT;
 
   var SUIT_CH = ['♠', '♥', '♣', '♦'];       // S H C D
@@ -23,7 +24,7 @@
   var btnStats = document.getElementById('btn-stats');
   var btnHint = document.getElementById('btn-hint');
 
-  var cardEls = [], slots = {}, M = {};
+  var cardEls = [], slots = {}, M = {}, lastPos = [], dropZone = null;
   var game = null;
   var mode = localStorage.getItem(PREF_KEY) || 'winnable';
   var worker = null, reqId = 0;
@@ -44,25 +45,31 @@
     var el = document.createElement('div');
     el.className = 'card down ' + ((SUIT(c) & 1) ? 'red' : 'black');
     el.dataset.c = c;
-    var suit = SUIT_CH[SUIT(c)], rank = RANK_CH[RANK(c) - 1];
     el.innerHTML =
       '<div class="inner">' +
-        '<div class="face">' +
-          '<div class="corner tl"><span class="r">' + rank + '</span><span class="s">' + suit + '</span></div>' +
-          '<div class="pip">' + suit + '</div>' +
-        '</div>' +
-        '<div class="back"></div>' +
+        '<div class="face">' + ART.faceSVG(SUIT(c), RANK(c)) + '</div>' +
+        '<div class="back">' + ART.backSVG() + '</div>' +
       '</div>';
     board.appendChild(el);
     return el;
   }
 
+  /* Column assignment for the top row. The stock sits on the RIGHT: it is the
+     most-tapped thing on the board, and the top-left corner is the hardest
+     place to reach with a thumb on a tall phone. The waste therefore fans
+     leftwards, away from it. */
+  var COL_FND = 0, COL_WASTE = 5, COL_STOCK = 6, WASTE_DIR = -1;
+
   function buildBoard() {
-    slots.stock = mkSlot('stock-slot');
-    slots.waste = mkSlot('waste-slot');
+    board.insertAdjacentHTML('afterbegin', ART.defsSVG());
     for (var i = 0; i < 4; i++) slots['f' + i] = mkSlot('foundation-slot', SUIT_CH[i]);
+    slots.waste = mkSlot('waste-slot');
+    slots.stock = mkSlot('stock-slot');
     for (var p = 0; p < 7; p++) slots['t' + p] = mkSlot('tableau-slot');
     for (var c = 0; c < 52; c++) cardEls.push(mkCard(c));
+    dropZone = document.createElement('div');
+    dropZone.id = 'dropzone';
+    board.appendChild(dropZone);
   }
 
   /* ---------- geometry -------------------------------------------------- */
@@ -94,22 +101,20 @@
     M.stepUMax = M.cardH * 0.52;
     M.stepDMax = M.cardH * 0.22;
     M.wasteFan = M.cardW * 0.34;
-    M.fontPx = M.cardW * 0.34;
 
     var i, el;
     for (i = 0; i < 52; i++) {
       el = cardEls[i];
       el.style.width = M.cardW + 'px';
       el.style.height = M.cardH + 'px';
-      el.style.fontSize = M.fontPx + 'px';
     }
     for (var k in slots) {
       slots[k].style.width = M.cardW + 'px';
       slots[k].style.height = M.cardH + 'px';
     }
-    place(slots.stock, colX(0), M.topY);
-    place(slots.waste, colX(1), M.topY);
-    for (i = 0; i < 4; i++) place(slots['f' + i], colX(3 + i), M.topY);
+    place(slots.stock, colX(COL_STOCK), M.topY);
+    place(slots.waste, colX(COL_WASTE), M.topY);
+    for (i = 0; i < 4; i++) place(slots['f' + i], colX(COL_FND + i), M.topY);
     for (i = 0; i < 7; i++) place(slots['t' + i], colX(i), M.tabY);
   }
 
@@ -123,20 +128,20 @@
 
     var nStock = s.stock.length;
     for (i = 0; i < nStock; i++) {
-      pos[s.stock[i]] = { x: colX(0), y: M.topY, z: i, down: true, kind: 'stock',
+      pos[s.stock[i]] = { x: colX(COL_STOCK), y: M.topY, z: i, down: true, kind: 'stock',
                           hidden: i < nStock - 2 };
     }
 
     var w = s.waste, n = w.length, showFrom = Math.max(0, n - 3);
     for (i = 0; i < n; i++) {
-      var off = i < showFrom ? 0 : (i - showFrom) * M.wasteFan;
-      pos[w[i]] = { x: colX(1) + off, y: M.topY, z: i, down: false, kind: 'waste',
+      var off = i < showFrom ? 0 : (i - showFrom) * M.wasteFan * WASTE_DIR;
+      pos[w[i]] = { x: colX(COL_WASTE) + off, y: M.topY, z: i, down: false, kind: 'waste',
                     hidden: i < showFrom - 1 };
     }
 
     for (st = 0; st < 4; st++) {
       for (var r = 1; r <= s.fnd[st]; r++) {
-        pos[st * 13 + (r - 1)] = { x: colX(3 + st), y: M.topY, z: r, down: false,
+        pos[st * 13 + (r - 1)] = { x: colX(COL_FND + st), y: M.topY, z: r, down: false,
                                    kind: 'foundation', suit: st, hidden: r < s.fnd[st] - 1 };
       }
     }
@@ -164,6 +169,7 @@
 
   function render(noAnim) {
     var pos = computePositions(), s = game.s;
+    lastPos = pos;
     for (var c = 0; c < 52; c++) {
       var pInfo = pos[c], el = cardEls[c];
       if (!pInfo || pInfo.hidden) { el.style.display = 'none'; continue; }
@@ -219,18 +225,152 @@
     el.classList.remove('nudge'); void el.offsetWidth; el.classList.add('nudge');
   }
 
-  board.addEventListener('click', function (e) {
+  /* ---------- input: tap and drag share one pointer pipeline --------------
+     A press becomes a drag only once it travels past a small threshold, so a
+     tap is never swallowed by an accidental wobble, and a drag never fires a
+     stray tap on release. */
+
+  var drag = null;
+  var DRAG_THRESHOLD = 7;   // px of travel before a press counts as a drag
+
+  function srcFromEl(el) {
+    var kind = el.dataset.kind;
+    if (kind === 'waste') {
+      var w = game.s.waste;
+      if (!w.length || +el.dataset.c !== w[w.length - 1]) return null;   // only the top card
+      return { kind: 'waste' };
+    }
+    if (kind === 'foundation') {
+      var st = +el.dataset.suit;
+      if (game.s.fnd[st] === 0) return null;
+      if (+el.dataset.c !== st * 13 + (game.s.fnd[st] - 1)) return null;
+      return { kind: 'foundation', suit: st };
+    }
+    if (kind === 'tableau') {
+      var idx = +el.dataset.idx;
+      if (idx < 0) return null;                                          // face down
+      return { kind: 'tableau', pile: +el.dataset.pile, idx: idx };
+    }
+    return null;
+  }
+
+  function dropTargets() {
+    var out = [], s = game.s, i, p;
+    for (i = 0; i < 4; i++) {
+      out.push({ rect: { x: colX(COL_FND + i), y: M.topY, w: M.cardW, h: M.cardH },
+                 dest: { kind: 'foundation', suit: i } });
+    }
+    for (p = 0; p < 7; p++) {
+      var u = s.up[p], d = s.down[p];
+      var top = u.length ? u[u.length - 1] : (d.length ? d[d.length - 1] : -1);
+      var h = M.cardH;
+      if (top >= 0 && lastPos[top]) h = (lastPos[top].y - M.tabY) + M.cardH;
+      out.push({ rect: { x: colX(p), y: M.tabY, w: M.cardW, h: Math.max(M.cardH, h) },
+                 dest: { kind: 'tableau', pile: p } });
+    }
+    return out;
+  }
+
+  function overlap(a, b) {
+    var w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+    var h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+    return (w > 0 && h > 0) ? w * h : 0;
+  }
+
+  /* The legal target the dragged card physically covers most.
+     Takes the drag explicitly: endDrag clears the module-level `drag` before
+     resolving the drop, so reading it here would always come back null. */
+  function bestTarget(dx, dy, d) {
+    d = d || drag;
+    if (!d || !d.origin || !d.origin.length) return null;
+    var lead = { x: d.origin[0].x + dx, y: d.origin[0].y + dy, w: M.cardW, h: M.cardH };
+    var targets = dropTargets(), best = null, bestArea = 0;
+    for (var i = 0; i < targets.length; i++) {
+      if (!game.canMove(d.src, targets[i].dest)) continue;
+      var a = overlap(lead, targets[i].rect);
+      if (a > bestArea) { bestArea = a; best = targets[i]; }
+    }
+    return bestArea > 0 ? best : null;
+  }
+
+  function showDropZone(t) {
+    if (!t) { dropZone.classList.remove('on'); return; }
+    dropZone.classList.add('on');
+    dropZone.style.width = t.rect.w + 'px';
+    dropZone.style.height = t.rect.h + 'px';
+    place(dropZone, t.rect.x, t.rect.y);
+  }
+
+  board.addEventListener('pointerdown', function (e) {
     if (autoRunning || !game || game.won) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     clearHints();
 
-    var slotEl = e.target.closest('.slot');
     var el = e.target.closest('.card');
-
     if (!el) {
-      if (slotEl && slotEl === slots.stock) { if (game.draw()) afterMove(); }
+      var slotEl = e.target.closest('.slot');
+      drag = slotEl ? { tapSlot: slotEl, moved: false, x0: e.clientX, y0: e.clientY,
+                        cards: [], pointerId: e.pointerId } : null;
       return;
     }
 
+    var src = srcFromEl(el);
+    var cards = src ? game.srcRun(src) : [];
+    drag = {
+      el: el, src: src, cards: cards, moved: false,
+      x0: e.clientX, y0: e.clientY, pointerId: e.pointerId,
+      origin: cards.map(function (c) { return { x: lastPos[c].x, y: lastPos[c].y }; })
+    };
+    try { board.setPointerCapture(e.pointerId); } catch (err) { /* older webkit */ }
+  });
+
+  board.addEventListener('pointermove', function (e) {
+    if (!drag || !drag.cards.length) return;
+    var dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+
+    if (!drag.moved) {
+      if (Math.abs(dx) + Math.abs(dy) < DRAG_THRESHOLD) return;
+      drag.moved = true;
+      for (var i = 0; i < drag.cards.length; i++) {
+        var el = cardEls[drag.cards[i]];
+        el.classList.add('dragging');
+        el.style.zIndex = 9000 + i;
+      }
+    }
+    for (var j = 0; j < drag.cards.length; j++) {
+      place(cardEls[drag.cards[j]], drag.origin[j].x + dx, drag.origin[j].y + dy);
+    }
+    showDropZone(bestTarget(dx, dy));
+  });
+
+  function endDrag(e, cancelled) {
+    if (!drag) return;
+    var d = drag; drag = null;
+    try { board.releasePointerCapture(d.pointerId); } catch (err) { /* ignore */ }
+    showDropZone(null);
+
+    if (!d.moved) {                       // it was a tap
+      if (d.tapSlot) { if (d.tapSlot === slots.stock && game.draw()) afterMove(); return; }
+      handleTap(d.el);
+      return;
+    }
+
+    for (var i = 0; i < d.cards.length; i++) {
+      var el = cardEls[d.cards[i]];
+      el.classList.remove('dragging');
+      void el.offsetWidth;                // restore the transition before we move it back
+    }
+    var t = cancelled ? null : bestTarget(e.clientX - d.x0, e.clientY - d.y0, d);
+    if (t && game.doMove(d.src, t.dest)) afterMove();
+    else { render(); if (!cancelled) nudge(d.el); }
+  }
+
+  board.addEventListener('pointerup', function (e) { endDrag(e, false); });
+  board.addEventListener('pointercancel', function (e) { endDrag(e, true); });
+
+  /* Tap: send the card to the first legal home, foundation first. */
+  function handleTap(el) {
+    if (!el) return;
     var kind = el.dataset.kind, ok = false;
     if (kind === 'stock') {
       ok = game.draw();
@@ -243,7 +383,7 @@
       if (idx >= 0) ok = game.playTableau(+el.dataset.pile, idx);
     }
     if (ok) afterMove(); else nudge(el);
-  });
+  }
 
   function afterMove() {
     render();

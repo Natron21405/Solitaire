@@ -15,9 +15,15 @@ dependencies, no server — open `index.html` and it runs.
 
 ## Features
 
-- **Tap to move.** Tapping a card sends it to the first legal home, foundation
-  first. Tapping a card that has others stacked on it moves the whole run.
-  Foundation cards tap back down to the tableau.
+- **Tap or drag.** Tapping a card sends it to the first legal home, foundation
+  first; tapping a card with others stacked on it moves the whole run.
+  Dragging works too — press and move past a few pixels and the card (or run)
+  follows your finger, with the landing spot outlined. A press that does not
+  travel stays a tap, so the two never fight each other. Foundation cards come
+  back down to the tableau either way.
+- **Stock on the right.** The stock is the most-tapped thing on the board and
+  the top-left corner is the hardest place to reach one-handed on a tall
+  phone, so it sits top-right with the waste fanning away from it.
 - **Guaranteed-winnable deals.** Choose "Winnable only" and every shuffle is
   run through a solver before it reaches the board. "Random deal" is there too,
   and the statistics are tracked separately for each.
@@ -66,11 +72,29 @@ reach. The shortcut now also requires the stock and waste to be empty, which is
 provable. The same distinction is why Autocomplete plays greedily when the
 stock is empty and hands the job to the solver otherwise.
 
+## The card faces
+
+`js/cardart.js` draws every face as an inline SVG on a 100 x 148 grid, so the
+same artwork is crisp at 50px on a phone and 200px on a tablet. Suits are
+paths rather than the Unicode characters ♠♥♣♦, which render as colour emoji on
+some iOS versions and change proportions between platforms. Numbers use the
+traditional pip layouts with the lower half rotated; courts get a framed panel
+and a rank device, since a portrait turns to mud at 50px wide.
+
+Two rendering traps are worth remembering, both of which broke the cards once:
+
+- The card flip is a 3D transform. Putting `filter` on `.face` or `.back`
+  forces those elements to `transform-style: flat`, which silently disables
+  `backface-visibility` — every card then shows its back. Use `box-shadow`.
+- `.back` must carry `transform: rotateY(180deg)`. Without it both sides face
+  the same way and the back simply paints over the face.
+
 ## Layout
 
 ```
 index.html              markup + iOS meta tags
 css/styles.css          theme and layout
+js/cardart.js           card faces and backs, drawn as SVG
 js/solver.js            search, rules, state (no DOM — also runs in node)
 js/deal.js              seeded shuffle
 js/game.js              playable game: moves, undo, autocomplete
