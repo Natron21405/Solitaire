@@ -27,7 +27,7 @@
   var game = null;
   var mode = localStorage.getItem(PREF_KEY) || 'winnable';
   var worker = null, reqId = 0;
-  var pendingCheck = null, checkTimer = null, workerBusy = false;
+  var workerBusy = false;
   var deadFlagged = false, autoRunning = false, tickHandle = null;
 
   /* ---------- DOM construction (once) ---------------------------------- */
@@ -69,19 +69,32 @@
 
   function layout() {
     var bw = board.clientWidth, bh = board.clientHeight;
-    M.padX = Math.max(3, bw * 0.008);
-    M.gapX = Math.max(3, bw * 0.009);
-    M.cardW = (bw - 2 * M.padX - 6 * M.gapX) / 7;
-    M.cardH = M.cardW * 1.45;
-    M.topY = 4;
-    M.tabY = M.topY + M.cardH + Math.max(12, M.cardH * 0.20);
+    M.gapX = Math.max(3, Math.min(bw * 0.009, 10));
+
+    /* Card size is constrained by BOTH axes.
+       Width: seven columns must fit side by side.
+       Height: the top row, the gap, and a tableau pile deep enough to hold the
+       opening staircase must all fit above the toolbar. Sizing on width alone
+       works in portrait but blows out in landscape, where the cards end up
+       taller than the board. */
+    var byWidth  = (bw - 6 * M.gapX - 8) / 7;
+    var byHeight = bh / (1.48 * 3.55);      // topRow + gap + a 7-deep pile
+    M.cardW = Math.max(26, Math.min(byWidth, byHeight, 108));
+    M.cardH = M.cardW * 1.48;
+
+    // Centre the whole board; on a wide screen this keeps it from stretching.
+    M.padX = Math.max(3, (bw - (7 * M.cardW + 6 * M.gapX)) / 2);
+    M.topY = Math.max(4, Math.min(14, (bh - M.cardH * 3.55) * 0.12));
+    M.tabY = M.topY + M.cardH + Math.max(12, M.cardH * 0.18);
     M.tabH = Math.max(M.cardH + 10, bh - M.tabY - 6);
-    // Generous fan: the index strip of a covered card must stay readable, and
-    // a phone has far more vertical room than a 7-column tableau needs.
-    M.stepD = M.cardH * 0.20;
-    M.stepU = M.cardH * 0.42;
-    M.wasteFan = M.cardW * 0.32;
-    M.fontPx = M.cardW * 0.32;
+    /* Adaptive fan. A phone is width-bound — seven columns fix the card size —
+       but vertical room is plentiful, so piles spread out as far as they can
+       and only tighten when a pile actually gets long. That keeps the exposed
+       strip of a covered card (the tap target) as large as the board allows. */
+    M.stepUMax = M.cardH * 0.52;
+    M.stepDMax = M.cardH * 0.22;
+    M.wasteFan = M.cardW * 0.34;
+    M.fontPx = M.cardW * 0.34;
 
     var i, el;
     for (i = 0; i < 52; i++) {
@@ -130,7 +143,7 @@
 
     for (p = 0; p < 7; p++) {
       var d = s.down[p], u = s.up[p];
-      var stepD = M.stepD, stepU = M.stepU;
+      var stepU = M.stepUMax, stepD = M.stepDMax;
       var need = d.length * stepD + Math.max(0, u.length - 1) * stepU + M.cardH;
       if (need > M.tabH) {                     // squeeze a tall pile so it always fits
         var f = (M.tabH - M.cardH) / Math.max(1, need - M.cardH);
@@ -235,8 +248,7 @@
   function afterMove() {
     render();
     if (game.checkWon()) { finish(true); return; }
-    if (!game.hasAnyMove()) { showDeadEnd(true); return; }
-    scheduleCheck();
+    if (!game.hasAnyMove()) { showDeadEnd(); return; }
   }
 
   /* ---------- solver worker ---------------------------------------------- */
@@ -270,28 +282,18 @@
       else { toast('No finish found — playing what I can.'); greedyFinish(); }
       return;
     }
-    if (m.kind === 'check') {
-      if (!game || !pendingCheck || pendingCheck.id !== m.id) { pendingCheck = null; return; }
-      var stillSame = pendingCheck.sig === S.stateKey(game.s);
-      pendingCheck = null;
-      if (stillSame && m.result === 'unsolvable' && !deadFlagged) showDeadEnd(false);
-    }
+
   }
 
   var dealResolve = null;
 
-  function scheduleCheck() {
-    clearTimeout(checkTimer);
-    if (!worker || deadFlagged || !game || game.won) return;
-    // Debounced: we only spend CPU once you have stopped moving for a moment.
-    checkTimer = setTimeout(function () {
-      if (workerBusy || !worker || deadFlagged || game.won) return;
-      workerBusy = true;
-      var id = ++reqId;
-      pendingCheck = { id: id, sig: S.stateKey(game.s) };
-      worker.postMessage({ cmd: 'check', id: id, state: game.plainState() });
-    }, 1500);
-  }
+  /* NOTE: there is deliberately no background winnability check.
+     An earlier build ran the solver after every move and interrupted you the
+     moment the position became unwinnable. That is not wanted: a game you
+     cannot win is still a game you can play, and the interruption ends it for
+     you. The only automatic stop is a hard dead end -- no legal move of any
+     kind remains -- which is a fact about the board, not a verdict on it.
+     The solver still answers when YOU ask, via Hint. */
 
   function requestHint() {
     if (!worker) { toast('Solver unavailable.'); return; }
@@ -370,26 +372,21 @@
     if (c) c.onclick = closeSheet;
   }
 
-  function showDeadEnd(hardStop) {
+  /* Fires only when the board is genuinely frozen: no legal move remains
+     anywhere, including pressing the stock. */
+  function showDeadEnd() {
     deadFlagged = true;
-    clearTimeout(checkTimer);
     openSheet(
-      '<h1>' + (hardStop ? 'No moves left' : "This one can't be won") + '</h1>' +
-      '<p>' + (hardStop
-        ? 'There is no legal move anywhere on the board.'
-        : 'The solver searched every remaining line from this position and none of them finish. You can still play on if you would rather.') +
-      '</p>' +
+      '<h1>No moves left</h1>' +
+      '<p>There is no legal move anywhere on the board — nothing to play, and nothing left in the stock.</p>' +
       '<button class="btn primary" id="dn">New game</button>' +
-      (game.canUndo() ? '<button class="btn" id="du">Undo last move</button>' : '') +
-      (hardStop ? '' : '<button class="btn" id="dk">Keep playing</button>')
+      (game.canUndo() ? '<button class="btn" id="du">Undo last move</button>' : '')
     );
     sheet.querySelector('#dn').onclick = function () { recordAbandon(); closeSheet(); showNewGameSheet(false); };
     var u = sheet.querySelector('#du');
     if (u) u.onclick = function () {
-      game.undo(); deadFlagged = false; closeSheet(); render(); scheduleCheck();
+      game.undo(); deadFlagged = false; closeSheet(); render();
     };
-    var k = sheet.querySelector('#dk');
-    if (k) k.onclick = closeSheet;
   }
 
   function statRow(b) {
@@ -456,13 +453,10 @@
     game = new G.Game(dealState, { mode: m });
     deadFlagged = false;
     autoRunning = false;
-    clearTimeout(checkTimer);
-    pendingCheck = null;
     clearHints();
     closeSheet();
     layout();
     render(true);
-    scheduleCheck();
   }
 
   /* A game you walk away from mid-play counts as a loss — otherwise the win
@@ -495,7 +489,6 @@
 
   function runAutocomplete() {
     if (autoRunning || !game) return;
-    clearTimeout(checkTimer);
     if (game.greedyFinishIsSafe() || !worker) { greedyFinish(); return; }
     // Stock still in play: let the solver pick the order, since naive greedy
     // play can strand a card that only every third stock press exposes.
@@ -549,7 +542,7 @@
   btnUndo.onclick = function () {
     if (!game || autoRunning) return;
     clearHints();
-    if (game.undo()) { deadFlagged = false; render(); scheduleCheck(); }
+    if (game.undo()) { deadFlagged = false; render(); }
   };
   btnNew.onclick = function () { if (!autoRunning) showNewGameSheet(false); };
   btnStats.onclick = function () { if (!autoRunning) showStats('all'); };

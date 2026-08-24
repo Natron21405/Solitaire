@@ -8,7 +8,6 @@ var S = self.KSolver, D = self.KDeal;
 // this one" -- a fresh deal is far cheaper than the tail of a hard search.
 var GEN = { maxNodes: 120000, restarts: 6 };
 var HINT = { maxNodes: 250000, restarts: 8 };
-var PROOF = { maxNodes: 2500000, restarts: 1 };   // single exhaustive dive
 
 self.onmessage = function (e) {
   var msg = e.data, t0 = Date.now();
@@ -43,15 +42,4 @@ self.onmessage = function (e) {
     return;
   }
 
-  if (msg.cmd === 'check') {
-    // First a quick look for a win; only if that fails do we spend the big
-    // budget trying to *prove* there isn't one.
-    var rc = S.solve(msg.state, HINT);
-    if (rc.result !== 'win') {
-      var deep = S.solve(msg.state, PROOF);
-      if (deep.result !== 'unknown') rc = deep;
-    }
-    self.postMessage({ kind: 'check', id: msg.id, result: rc.result, ms: Date.now() - t0 });
-    return;
-  }
 };

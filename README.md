@@ -21,11 +21,14 @@ dependencies, no server — open `index.html` and it runs.
 - **Guaranteed-winnable deals.** Choose "Winnable only" and every shuffle is
   run through a solver before it reaches the board. "Random deal" is there too,
   and the statistics are tracked separately for each.
-- **It tells you when the game is lost.** Two separate checks: a hard dead end
-  (no legal move anywhere) fires instantly, and in the background the solver
-  looks for any winning line from your current position. It only says a game
-  cannot be won when it has *exhausted* the search — never as a guess.
-- **Hint.** Asks the solver for the next move in a winning line.
+- **It stops only when the board is actually stuck.** If no legal move remains
+  anywhere — nothing playable, nothing left in the stock — you get a message
+  and the offer of a new game. Deliberately, nothing interrupts you merely
+  because a position has become unwinnable: a game you cannot win is still a
+  game you can play, and the interruption would end it for you.
+- **Hint.** Asks the solver for the next move in a winning line. This is the
+  opt-in way to find out whether a game is still alive — if no line exists, it
+  says so, but only because you asked.
 - **Autocomplete.** Offered as soon as no face-down cards remain.
 - **Lifetime statistics** in `localStorage`: games, wins, win rate, current and
   best streak, fastest win, fewest moves, total time, cards sent home.
