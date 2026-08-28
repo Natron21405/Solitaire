@@ -28,13 +28,17 @@ dependencies, no server — open `index.html` and it runs.
   run through a solver before it reaches the board. "Random deal" is there too,
   and the statistics are tracked separately for each.
 - **It stops only when the board is actually stuck.** If no legal move remains
-  anywhere — nothing playable, nothing left in the stock — you get a message
-  and the offer of a new game. Deliberately, nothing interrupts you merely
-  because a position has become unwinnable: a game you cannot win is still a
-  game you can play, and the interruption would end it for you.
+  anywhere, you get a message and the offer of a new game or a replay.
+  Deliberately, nothing interrupts you merely because a position has become
+  unwinnable: a game you cannot win is still a game you can play, and the
+  interruption would end it for you.
 - **Hint.** Asks the solver for the next move in a winning line. This is the
   opt-in way to find out whether a game is still alive — if no line exists, it
   says so, but only because you asked.
+- **Replay.** Restart the deal you are on from its opening position. The
+  abandoned attempt is not recorded, so a replay costs nothing in the
+  statistics — starting a *new* game still counts the one you walked away
+  from as a loss.
 - **Autocomplete.** Offered as soon as no face-down cards remain.
 - **Lifetime statistics** in `localStorage`: games, wins, win rate, current and
   best streak, fastest win, fewest moves, total time, cards sent home.
@@ -71,6 +75,48 @@ ever exposes every third card, so a needed card can sit permanently out of
 reach. The shortcut now also requires the stock and waste to be empty, which is
 provable. The same distinction is why Autocomplete plays greedily when the
 stock is empty and hands the job to the solver otherwise.
+
+## Three bugs worth remembering
+
+**Hints used to oscillate.** Each request re-solved from scratch, so after you
+played the suggested move the fresh search could hand back its inverse — a
+black ten shuffled between two red jacks forever. The solver was not wrong;
+asking it the same question twice from different sides of one move just gets
+two different answers. The fix is to ask once: a hint request now returns the
+*whole* winning line, which is replayed into a `position -> next move` map.
+Following a hint looks up the new position and gets the next step of the same
+line. Leaving the line recomputes; undo lands on a position already in the map.
+
+**Autocomplete could spin forever.** `autocompleteStep()` presses the stock when
+nothing is playable and reports `true` for having done so, which is an infinite
+loop in any position with no productive move — the stock cycles, snapshotting
+every press, until the app is force-quit. It now allows at most one full pass
+through the stock with nothing reaching a foundation, then stops and says so.
+
+**"No moves left" almost never fired.** The old check answered "yes, there are
+moves" whenever the stock held anything, on the assumption you can always press
+it. That is wrong for draw three: cycling exposes only every third card, so a
+full pass can surface nothing playable at all. It also could not reuse the
+solver's move generator, which prunes legal-but-pointless moves for search
+speed — correct for searching, wrong for deciding whether a player is stuck.
+The check now enumerates real legality, including every card the stock can
+actually reach.
+
+## Are "winnable" deals really winnable?
+
+Yes — and it is checked end to end, not just asserted. `tools/test-winnable.js`
+reproduces the generator's exact loop, then replays the winning line through
+the `Game` class's **public** move API, the same `draw()` and `doMove()` that
+taps and drags call. A deal only passes if every move is accepted and the
+foundations reach 52. **720 of 720** deals passed across four seed ranges.
+
+That does not mean a game *you* played was winnable when you gave up.
+`tools/test-naive-play.js` takes verified-winnable deals and plays them the way
+the tap encourages — foundation first, always — for seventy moves, then asks
+the solver whether a win is still possible. **43% are provably dead by then.**
+Sending a card home early is the classic way to lose Klondike: it is no longer
+there to hold the run that needed it. The deal was winnable; the game stopped
+being so. Undo, Hint and Replay all exist for exactly this.
 
 ## The card faces
 
@@ -111,9 +157,11 @@ tools/                  benchmarks and tests (node)
 ## Tests
 
 ```
-node --stack-size=8000 tools/test-game.js 40    # rules, undo, autocomplete, invariants
-node --stack-size=8000 tools/bench.js 150       # solver win rate and speed
-node --stack-size=8000 tools/tune.js            # move-ordering weight sweep
+node --stack-size=8000 tools/test-game.js 40        # rules, undo, autocomplete, invariants
+node --stack-size=8000 tools/test-winnable.js 200  # generated deals really do win, via the game API
+node --stack-size=8000 tools/test-naive-play.js 60 # how often eager play kills a winnable deal
+node --stack-size=8000 tools/bench.js 150          # solver win rate and speed
+node --stack-size=8000 tools/tune.js               # move-ordering weight sweep
 ```
 
 `test-game.js` checks card conservation (all 52 accounted for), the tableau run

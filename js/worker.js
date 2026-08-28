@@ -31,8 +31,13 @@ self.onmessage = function (e) {
   }
 
   if (msg.cmd === 'hint') {
+    // Return the WHOLE winning line, not just its first move. The UI keeps it
+    // as a plan keyed by position, so following a hint yields the next step of
+    // the same line instead of a freshly-computed one -- which is what made
+    // hints oscillate, shuffling a card back and forth between two equivalent
+    // piles forever.
     var rh = S.solve(msg.state, HINT);
-    self.postMessage({ kind: 'hint', id: msg.id, result: rh.result, move: rh.moves && rh.moves.length ? rh.moves[0] : null });
+    self.postMessage({ kind: 'hint', id: msg.id, result: rh.result, moves: rh.moves || null });
     return;
   }
 

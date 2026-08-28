@@ -218,7 +218,7 @@
 
   function clearHints() {
     for (var i = 0; i < 52; i++) cardEls[i].classList.remove('playable-hint', 'dest-hint');
-    for (var k in slots) slots[k].classList.remove('dest-hint');
+    for (var k in slots) slots[k].classList.remove('dest-hint', 'src-hint');
   }
 
   function nudge(el) {
@@ -410,16 +410,23 @@
       return;
     }
     if (m.kind === 'hint') {
-      if (m.result === 'win' && m.move) showHint(m.move);
-      else toast(m.result === 'unsolvable'
-        ? "There's no winning line left from here."
-        : "Couldn't find a line in the time available.");
+      if (m.result === 'win' && m.moves && m.moves.length) {
+        buildHintPlan(m.moves);
+        var mv = hintPlan[S.stateKey(game.s)];
+        if (mv) showHint(mv); else toast('No further move needed.');
+      } else {
+        toast(m.result === 'unsolvable'
+          ? "There's no winning line left from here."
+          : "Couldn't find a line in the time available.");
+      }
       return;
     }
     if (m.kind === 'solve') {
       autoRunning = false;
       if (m.result === 'win' && m.moves) playSolution(m.moves);
-      else { toast('No finish found — playing what I can.'); greedyFinish(); }
+      else toast(m.result === 'unsolvable'
+        ? "This one can't be finished from here."
+        : "Couldn't find a finish in the time available.");
       return;
     }
 
@@ -435,7 +442,31 @@
      kind remains -- which is a fact about the board, not a verdict on it.
      The solver still answers when YOU ask, via Hint. */
 
+  /* A hint plan is the solver's whole winning line, replayed once and stored
+     as position -> next move. Asking again after playing the suggested move
+     looks up the new position and returns the NEXT step of the same line, so
+     the advice stays coherent instead of being recomputed from scratch each
+     time -- which is what made hints oscillate, shuffling one card back and
+     forth between two equivalent piles. Undo lands on a position already in
+     the map, so it keeps working too. */
+  var hintPlan = null;
+
+  function buildHintPlan(moves) {
+    hintPlan = Object.create(null);
+    var sim = S.cloneState(game.s);
+    for (var i = 0; i < moves.length; i++) {
+      var k = S.stateKey(sim);
+      if (hintPlan[k] === undefined) hintPlan[k] = moves[i];
+      S.applyMove(sim, moves[i]);
+    }
+  }
+
   function requestHint() {
+    if (!game) return;
+    if (hintPlan) {
+      var known = hintPlan[S.stateKey(game.s)];
+      if (known) { showHint(known); return; }
+    }
     if (!worker) { toast('Solver unavailable.'); return; }
     if (workerBusy) { toast('Thinking…'); return; }
     workerBusy = true;
@@ -449,8 +480,13 @@
     if (mv.t === 'tf') { srcCard = game.topOf(mv.from); dest = slots['f' + SUIT(srcCard)]; }
     else if (mv.t === 'tt') { srcCard = s.up[mv.from][mv.idx]; dest = s.up[mv.to].length ? cardEls[game.topOf(mv.to)] : slots['t' + mv.to]; }
     else if (mv.t === 'wf' || mv.t === 'wt') {
-      if (mv.draws > 0) { srcCard = s.stock.length ? s.stock[s.stock.length - 1] : -1; if (srcCard < 0) slots.stock.classList.add('dest-hint'); }
-      else srcCard = s.waste[s.waste.length - 1];
+      if (mv.draws > 0) {
+        // The card is still buried in the stock, so point at the stock itself.
+        // Highlighting just the card is invisible: it is face down, and the
+        // pulse was painted on .face, which a face-down card hides.
+        slots.stock.classList.add('src-hint');
+        srcCard = s.stock.length ? s.stock[s.stock.length - 1] : -1;
+      } else srcCard = s.waste[s.waste.length - 1];
       if (mv.t === 'wt') dest = s.up[mv.to].length ? cardEls[game.topOf(mv.to)] : slots['t' + mv.to];
       else if (srcCard >= 0 && mv.draws === 0) dest = slots['f' + SUIT(srcCard)];
     } else if (mv.t === 'ft') {
@@ -485,6 +521,7 @@
   }
 
   function showNewGameSheet(firstRun) {
+    var canReplay = !!(game && game.moveCount > 0 && !game.won);
     openSheet(
       '<h1>' + (firstRun ? 'Pastel Solitaire' : 'New game') + '</h1>' +
       '<p>Klondike, three-card draw.</p>' +
@@ -498,6 +535,7 @@
         '<span class="d">A straight shuffle, like a real deck. Roughly one deal in five simply cannot be won.</span>' +
       '</button>' +
       '<button class="btn primary" id="go">Deal</button>' +
+      (canReplay ? '<button class="btn" id="replay">Replay this deal</button>' : '') +
       (firstRun ? '' : '<button class="btn" id="cancel">Cancel</button>')
     );
     sheet.querySelectorAll('.choice').forEach(function (b) {
@@ -508,6 +546,8 @@
       };
     });
     sheet.querySelector('#go').onclick = function () { startNewGame(); };
+    var rp = sheet.querySelector('#replay');
+    if (rp) rp.onclick = function () { closeSheet(); replayDeal(); };
     var c = sheet.querySelector('#cancel');
     if (c) c.onclick = closeSheet;
   }
@@ -519,9 +559,11 @@
     openSheet(
       '<h1>No moves left</h1>' +
       '<p>There is no legal move anywhere on the board — nothing to play, and nothing left in the stock.</p>' +
-      '<button class="btn primary" id="dn">New game</button>' +
+      '<button class="btn primary" id="dr">Try this deal again</button>' +
+      '<button class="btn" id="dn">New game</button>' +
       (game.canUndo() ? '<button class="btn" id="du">Undo last move</button>' : '')
     );
+    sheet.querySelector('#dr').onclick = function () { closeSheet(); replayDeal(); };
     sheet.querySelector('#dn').onclick = function () { recordAbandon(); closeSheet(); showNewGameSheet(false); };
     var u = sheet.querySelector('#du');
     if (u) u.onclick = function () {
@@ -589,8 +631,23 @@
     worker.postMessage({ cmd: 'winnableDeal', id: ++reqId, seed: randSeed() });
   }
 
+  /* Replay the current deal from its opening position.
+     The abandoned attempt is deliberately NOT recorded: clearing `game` first
+     skips recordAbandon(), so a replay costs you nothing in the statistics.
+     Starting a *new* game still counts the abandoned one as a loss. */
+  function replayDeal() {
+    if (!game) return;
+    var d = S.cloneState(game.deal);
+    d.seed = game.seed;
+    var m = game.mode;
+    game = null;
+    begin(d, m);
+    toast('Same deal, fresh start — this attempt was not counted.');
+  }
+
   function begin(dealState, m) {
     game = new G.Game(dealState, { mode: m });
+    hintPlan = null;
     deadFlagged = false;
     autoRunning = false;
     clearHints();
@@ -638,17 +695,34 @@
     worker.postMessage({ cmd: 'solve', id: ++reqId, state: game.plainState() });
   }
 
+  /* Greedy finish, with a hard stall guard.
+
+     autocompleteStep() presses the stock when nothing is playable and reports
+     true for having done so. Unguarded that is an infinite loop: in a position
+     with no productive move the stock cycles forever, snapshotting every
+     press, until the app has to be force-quit. This allows at most one full
+     pass through the stock with nothing reaching a foundation. */
   function greedyFinish() {
+    if (!game) return;
     autoRunning = true;
+    var idle = 0;
+    var limit = game.s.stock.length + game.s.waste.length + 4;
     (function step() {
       if (!game) { autoRunning = false; return; }
       if (game.checkWon()) { autoRunning = false; render(); finish(true); return; }
+      var before = S.foundationTotal(game.s);
       if (!game.autocompleteStep()) {
         autoRunning = false; render();
         toast('Could not finish automatically from here.');
         return;
       }
+      idle = (S.foundationTotal(game.s) > before) ? 0 : idle + 1;
       render();
+      if (idle > limit) {
+        autoRunning = false;
+        toast('Stuck — the stock cycles with nothing playable.');
+        return;
+      }
       setTimeout(step, 70);
     })();
   }
@@ -726,7 +800,10 @@
       if (ok) afterMove();
       return ok;
     },
-    begin: begin, render: render, autocomplete: runAutocomplete
+    begin: begin, render: render, autocomplete: runAutocomplete,
+    greedyFinish: greedyFinish, replay: replayDeal, requestHint: requestHint,
+    hintFor: function () { return hintPlan ? hintPlan[S.stateKey(game.s)] : null; },
+    isAuto: function () { return autoRunning; }
   };
 
   if ('serviceWorker' in navigator) {

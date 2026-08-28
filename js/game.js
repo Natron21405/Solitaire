@@ -16,6 +16,8 @@
 
   function Game(state, meta) {
     this.s = S.cloneState(state);
+    this.deal = S.cloneState(state);      // pristine copy, for Replay
+    this.deal.seed = state.seed;
     this.seed = state.seed;
     this.mode = (meta && meta.mode) || 'winnable';
     this.history = [];          // full snapshots — unlimited undo
@@ -267,12 +269,60 @@
     return false;
   };
 
-  /* True only when the position is completely frozen: no legal move of any
-     kind remains. Distinct from "unwinnable", which the solver decides. */
+  /* True only when the position is completely frozen.
+
+     The old version answered "yes" whenever the stock held anything, on the
+     assumption that you can always press it. That is wrong for draw three:
+     cycling the stock exposes only every third card, so a full pass can
+     surface nothing playable at all. It also cannot use the solver's
+     generateMoves, which prunes legal-but-pointless moves for search speed —
+     fine for searching, wrong for deciding whether a player is stuck. So this
+     enumerates real legality, including every card the stock can actually
+     reach and the house rule that foundation cards may come back down. */
   Game.prototype.hasAnyMove = function () {
-    var s = this.s;
-    if (s.stock.length || s.waste.length) return true;   // can always press the stock
-    return S.generateMoves(s).length > 0;
+    var s = this.s, p, q, i, st;
+
+    for (p = 0; p < 7; p++) {
+      var c = this.topOf(p);
+      if (c >= 0 && S.canGoToFoundation(s, c)) return true;
+    }
+
+    for (p = 0; p < 7; p++) {
+      var u = s.up[p];
+      if (!u.length) continue;
+      for (i = 0; i < u.length; i++) {
+        var head = u[i];
+        var wholeColumn = (i === 0 && s.down[p].length === 0);
+        for (q = 0; q < 7; q++) {
+          if (q === p) continue;
+          var qEmpty = (s.up[q].length === 0 && s.down[q].length === 0);
+          if (qEmpty) {
+            // sliding a whole column into an empty one changes nothing
+            if (RANK(head) === 13 && !wholeColumn) return true;
+          } else if (S.canStackOnTableau(head, this.topOf(q))) return true;
+        }
+      }
+    }
+
+    var reach = S.reachableWaste(s);
+    for (i = 0; i < reach.length; i++) {
+      var card = reach[i].card;
+      if (S.canGoToFoundation(s, card)) return true;
+      for (q = 0; q < 7; q++) {
+        var qE = (s.up[q].length === 0 && s.down[q].length === 0);
+        if (qE ? RANK(card) === 13 : S.canStackOnTableau(card, this.topOf(q))) return true;
+      }
+    }
+
+    for (st = 0; st < 4; st++) {
+      if (!s.fnd[st]) continue;
+      var fc = st * 13 + (s.fnd[st] - 1);
+      for (q = 0; q < 7; q++) {
+        if (!s.up[q].length) continue;
+        if (S.canStackOnTableau(fc, this.topOf(q))) return true;
+      }
+    }
+    return false;
   };
 
   Game.prototype.elapsedMs = function () {
