@@ -41,6 +41,19 @@ self.onmessage = function (e) {
     return;
   }
 
+  if (msg.cmd === 'stuck') {
+    // Real frozen positions are tiny -- measured across thousands of played
+    // positions, the largest needed 80 nodes and the median 8, because a
+    // position with no progress available is a closed little space. Ordinary
+    // positions can run to 150k before they stumble on progress, so the cap
+    // is set at 20000: 250x the margin any genuine stuck position has ever
+    // needed, and a hard bound on the work. Anything hitting the cap reports
+    // not-stuck, so the player is never interrupted on a guess.
+    var rk = S.analyzeStuck(msg.state, { maxNodes: 20000 });
+    self.postMessage({ kind: 'stuck', id: msg.id, stuck: rk.stuck && rk.exhausted, nodes: rk.nodes });
+    return;
+  }
+
   if (msg.cmd === 'solve') {
     var rs = S.solve(msg.state, { maxNodes: 600000, restarts: 8 });
     self.postMessage({ kind: 'solve', id: msg.id, result: rs.result, moves: rs.moves || null });

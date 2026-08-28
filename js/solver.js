@@ -407,6 +407,124 @@
     return { result: 'unsolvable', moves: null, nodes: nodes };
   }
 
+  /* ---------- "is the player actually stuck?" -----------------------------
+
+     Distinct from "can this be won". A game can be unwinnable and still be
+     perfectly playable — cards to turn over, cards to send home. Interrupting
+     then would spoil it. What deserves an interruption is a position where
+     nothing can EVER happen again: every legal line just shuffles cards
+     between piles.
+
+     So: explore the whole reachable space and ask whether any position in it
+     turns over a face-down card, or puts more cards on the foundations than
+     you have now. The moment one does, we stop and report progress — which is
+     why this is cheap in an ordinary position. Only a genuinely closed
+     position runs to exhaustion, and a closed position is small by definition.
+
+     Returns { stuck, exhausted, nodes }. `stuck` is only ever true when the
+     search finished on its own; running out of budget reports stuck:false, so
+     a hard position is never mistaken for a dead one. */
+
+  /* Complete move generation — no search heuristics.
+     generateMoves() drops legal-but-pointless moves to keep the search fast.
+     That is right for solving and wrong here: a move this function skipped
+     could be the one that leads somewhere. The only things omitted are moves
+     into a second empty column (all empty columns are the same column) and
+     sliding an already-exposed King-headed column sideways, which produces a
+     position identical to the one you left. */
+  function allLegalMoves(s) {
+    var moves = [], p, q, i, st;
+
+    var firstEmpty = -1;
+    for (p = 0; p < 7; p++) {
+      if (s.up[p].length === 0 && s.down[p].length === 0) { firstEmpty = p; break; }
+    }
+
+    for (p = 0; p < 7; p++) {
+      var c = topOf(s, p);
+      if (c >= 0 && canGoToFoundation(s, c)) moves.push({ t: 'tf', from: p });
+    }
+
+    for (p = 0; p < 7; p++) {
+      var u = s.up[p];
+      for (i = 0; i < u.length; i++) {
+        var head = u[i];
+        var wholeColumn = (i === 0 && s.down[p].length === 0);
+        for (q = 0; q < 7; q++) {
+          if (q === p) continue;
+          var qEmpty = (s.up[q].length === 0 && s.down[q].length === 0);
+          if (qEmpty) {
+            if (q !== firstEmpty) continue;
+            if (RANK(head) !== 13 || wholeColumn) continue;
+          } else if (!canStackOnTableau(head, topOf(s, q))) continue;
+          moves.push({ t: 'tt', from: p, idx: i, to: q });
+        }
+      }
+    }
+
+    var reach = reachableWaste(s);
+    for (i = 0; i < reach.length; i++) {
+      var r = reach[i];
+      if (canGoToFoundation(s, r.card)) moves.push({ t: 'wf', draws: r.draws });
+      for (q = 0; q < 7; q++) {
+        var qE = (s.up[q].length === 0 && s.down[q].length === 0);
+        if (qE && q !== firstEmpty) continue;
+        if (qE ? RANK(r.card) === 13 : canStackOnTableau(r.card, topOf(s, q))) {
+          moves.push({ t: 'wt', draws: r.draws, to: q });
+        }
+      }
+    }
+
+    for (st = 0; st < 4; st++) {
+      if (!s.fnd[st]) continue;
+      var fc = st * 13 + (s.fnd[st] - 1);
+      for (q = 0; q < 7; q++) {
+        var e = (s.up[q].length === 0 && s.down[q].length === 0);
+        if (e) {
+          if (q === firstEmpty && RANK(fc) === 13) moves.push({ t: 'ft', suit: st, to: q });
+        } else if (canStackOnTableau(fc, topOf(s, q))) {
+          moves.push({ t: 'ft', suit: st, to: q });
+        }
+      }
+    }
+    return moves;
+  }
+
+  function analyzeStuck(state, opts) {
+    opts = opts || {};
+    var maxNodes = opts.maxNodes || 250000;
+
+    var baseFnd = foundationTotal(state);
+    var baseDown = downCount(state);
+    if (baseFnd === 52) return { stuck: false, exhausted: true, nodes: 0 };
+
+    var visited = Object.create(null);
+    var stack = [cloneState(state)];
+    var nodes = 0;
+
+    while (stack.length) {
+      if (nodes >= maxNodes) return { stuck: false, exhausted: false, nodes: nodes };
+      var s = stack.pop();
+      var k = stateKey(s);
+      if (visited[k]) continue;
+      visited[k] = 1;
+      nodes++;
+
+      // any turned-over card, or any net gain on the foundations, is progress
+      if (foundationTotal(s) > baseFnd || downCount(s) < baseDown) {
+        return { stuck: false, exhausted: false, nodes: nodes };
+      }
+
+      var ms = allLegalMoves(s);
+      for (var i = 0; i < ms.length; i++) {
+        var next = cloneState(s);
+        applyMove(next, ms[i]);
+        if (!visited[stateKey(next)]) stack.push(next);
+      }
+    }
+    return { stuck: true, exhausted: true, nodes: nodes };
+  }
+
   /* Public entry point.
        maxNodes  total node budget across all restarts
        restarts  number of randomised dives (1 = deterministic, exhaustive-capable)
@@ -445,7 +563,8 @@
     isSafeToFoundation: isSafeToFoundation,
     drawStep: drawStep, reachableWaste: reachableWaste,
     applyMove: applyMove, generateMoves: generateMoves,
-    autoplaySafe: autoplaySafe, solve: solve, solveOnce: solveOnce, weights: W
+    autoplaySafe: autoplaySafe, solve: solve, solveOnce: solveOnce, weights: W,
+    allLegalMoves: allLegalMoves, analyzeStuck: analyzeStuck
   };
 
   root.KSolver = API;

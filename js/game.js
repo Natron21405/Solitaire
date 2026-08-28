@@ -269,6 +269,34 @@
     return false;
   };
 
+  /* Cheap one-ply screen: is there a move available RIGHT NOW that plainly
+     makes progress — a card that goes home, or a move that turns one over?
+     If so the player is obviously not stuck and the expensive reachability
+     analysis can be skipped entirely. This is what keeps the stuck check from
+     running a search after every single move. */
+  Game.prototype.canProgressNow = function () {
+    var s = this.s, p, i;
+
+    for (p = 0; p < 7; p++) {
+      var c = this.topOf(p);
+      if (c >= 0 && S.canGoToFoundation(s, c)) return true;
+      // moving the whole face-up run off a pile turns over the card beneath
+      if (s.up[p].length && s.down[p].length) {
+        var head = s.up[p][0];
+        for (var q = 0; q < 7; q++) {
+          if (q === p) continue;
+          var qEmpty = (s.up[q].length === 0 && s.down[q].length === 0);
+          if (qEmpty ? RANK(head) === 13 : S.canStackOnTableau(head, this.topOf(q))) return true;
+        }
+      }
+    }
+    var reach = S.reachableWaste(s);
+    for (i = 0; i < reach.length; i++) {
+      if (S.canGoToFoundation(s, reach[i].card)) return true;
+    }
+    return false;
+  };
+
   /* True only when the position is completely frozen.
 
      The old version answered "yes" whenever the stock held anything, on the

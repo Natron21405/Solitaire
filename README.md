@@ -27,11 +27,12 @@ dependencies, no server — open `index.html` and it runs.
 - **Guaranteed-winnable deals.** Choose "Winnable only" and every shuffle is
   run through a solver before it reaches the board. "Random deal" is there too,
   and the statistics are tracked separately for each.
-- **It stops only when the board is actually stuck.** If no legal move remains
-  anywhere, you get a message and the offer of a new game or a replay.
-  Deliberately, nothing interrupts you merely because a position has become
-  unwinnable: a game you cannot win is still a game you can play, and the
-  interruption would end it for you.
+- **It stops only when the board is genuinely finished.** When no line from
+  your position can ever turn another card over or reach a foundation — when
+  everything still legal just shuffles cards between piles — a banner says so
+  and offers a replay or a new game. Deliberately, nothing interrupts you
+  merely because a position has become *unwinnable*: a game you cannot win is
+  still a game you can play, and the interruption would end it for you.
 - **Hint.** Asks the solver for the next move in a winning line. This is the
   opt-in way to find out whether a game is still alive — if no line exists, it
   says so, but only because you asked.
@@ -93,14 +94,42 @@ loop in any position with no productive move — the stock cycles, snapshotting
 every press, until the app is force-quit. It now allows at most one full pass
 through the stock with nothing reaching a foundation, then stops and says so.
 
-**"No moves left" almost never fired.** The old check answered "yes, there are
-moves" whenever the stock held anything, on the assumption you can always press
-it. That is wrong for draw three: cycling exposes only every third card, so a
-full pass can surface nothing playable at all. It also could not reuse the
-solver's move generator, which prunes legal-but-pointless moves for search
-speed — correct for searching, wrong for deciding whether a player is stuck.
-The check now enumerates real legality, including every card the stock can
-actually reach.
+**"No moves left" almost never fired.** Two rounds of this. First the check
+answered "yes, there are moves" whenever the stock held anything, on the
+assumption you can always press it — wrong for draw three, where cycling
+exposes only every third card. Fixing that to enumerate real legality still
+was not enough, because *legal* is the wrong bar: sliding a black ten between
+two red jacks is a legal move forever. What matters is whether anything can
+still **happen**.
+
+So the detector now asks a different question, in `analyzeStuck()`: explore the
+whole reachable space and see whether any position in it turns over a face-down
+card or puts more cards on the foundations than you have now. The moment one
+does, it stops and reports progress — which is why it is cheap in an ordinary
+position. Only a genuinely closed position runs to exhaustion, and a closed
+position is small by definition.
+
+Three things keep it from spoiling a game you could still play:
+
+- A one-ply screen (`canProgressNow()`) skips the search entirely whenever an
+  obviously progressing move is already on the board.
+- It is debounced, so it costs nothing while you are actually playing.
+- It only speaks when the search **finished on its own**. Running out of budget
+  reports not-stuck, so a merely complicated position is never mistaken for a
+  dead one.
+
+The budget was set from measurement, not taste: across thousands of played
+positions the largest genuine stuck verdict needed **80 nodes** and the median
+**8**, while ordinary positions can run to 150,000 before stumbling on
+progress. The cap is 20,000 — 250x the margin any real stuck position has ever
+needed, and a hard ceiling of about 0.4s. Across 5,742 positions from 40
+simulated games: 15 stuck verdicts, **zero** false positives, and none on a
+position the solver could still win.
+
+`analyzeStuck` deliberately uses its own `allLegalMoves()` rather than the
+search's `generateMoves()`. The latter drops legal-but-pointless moves to go
+fast — right for solving, wrong here, where a move it skipped could be the one
+that leads somewhere.
 
 ## Are "winnable" deals really winnable?
 
@@ -158,6 +187,7 @@ tools/                  benchmarks and tests (node)
 
 ```
 node --stack-size=8000 tools/test-game.js 40        # rules, undo, autocomplete, invariants
+node --stack-size=8000 tools/test-stuck.js 40      # "no moves left" never fires early
 node --stack-size=8000 tools/test-winnable.js 200  # generated deals really do win, via the game API
 node --stack-size=8000 tools/test-naive-play.js 60 # how often eager play kills a winnable deal
 node --stack-size=8000 tools/bench.js 150          # solver win rate and speed

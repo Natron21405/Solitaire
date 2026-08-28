@@ -28,7 +28,7 @@
   var game = null;
   var mode = localStorage.getItem(PREF_KEY) || 'winnable';
   var worker = null, reqId = 0;
-  var workerBusy = false;
+  var workerBusy = false, stuckTimer = null, pendingStuck = null;
   var deadFlagged = false, autoRunning = false, tickHandle = null;
 
   /* ---------- DOM construction (once) ---------------------------------- */
@@ -388,7 +388,34 @@
   function afterMove() {
     render();
     if (game.checkWon()) { finish(true); return; }
-    if (!game.hasAnyMove()) { showDeadEnd(); return; }
+    if (!game.hasAnyMove()) { showStuck(true); return; }   // hard freeze: instant
+    scheduleStuckCheck();
+  }
+
+  /* Ask the worker whether the game can still go anywhere.
+
+     This is NOT the winnability check that was removed — it never comments on
+     whether you can win. It only fires when the position is closed: no line
+     from here ever turns a card over or puts one more card on the
+     foundations. A game you can still lose is left alone; a game where the
+     only remaining moves shuffle cards between piles is not.
+
+     Gated three ways so it stays cheap and never cries wolf: skipped outright
+     when an obviously progressing move exists, debounced so it costs nothing
+     while you are actually playing, and acted on only when the search
+     finished on its own. */
+  function scheduleStuckCheck() {
+    clearTimeout(stuckTimer);
+    if (!worker || deadFlagged || !game || game.won) return;
+    if (game.canProgressNow()) return;
+    stuckTimer = setTimeout(function () {
+      if (!game || game.won || deadFlagged || workerBusy) return;
+      if (game.canProgressNow()) return;
+      workerBusy = true;
+      var id = ++reqId;
+      pendingStuck = { id: id, sig: S.stateKey(game.s) };
+      worker.postMessage({ cmd: 'stuck', id: id, state: game.plainState() });
+    }, 900);
   }
 
   /* ---------- solver worker ---------------------------------------------- */
@@ -419,6 +446,13 @@
           ? "There's no winning line left from here."
           : "Couldn't find a line in the time available.");
       }
+      return;
+    }
+    if (m.kind === 'stuck') {
+      if (!game || !pendingStuck || pendingStuck.id !== m.id) { pendingStuck = null; return; }
+      var same = pendingStuck.sig === S.stateKey(game.s);
+      pendingStuck = null;
+      if (same && m.stuck && !deadFlagged && !game.won) showStuck(false);
       return;
     }
     if (m.kind === 'solve') {
@@ -500,7 +534,11 @@
 
   /* ---------- overlays ---------------------------------------------------- */
 
-  function openSheet(html) { sheet.innerHTML = html; overlay.classList.add('show'); }
+  function openSheet(html) {
+    sheet.className = 'sheet';
+    sheet.innerHTML = html;
+    overlay.classList.add('show');
+  }
   function closeSheet() { overlay.classList.remove('show'); }
 
   var toastTimer = null;
@@ -554,20 +592,27 @@
 
   /* Fires only when the board is genuinely frozen: no legal move remains
      anywhere, including pressing the stock. */
-  function showDeadEnd() {
+  function showStuck(hardFreeze) {
     deadFlagged = true;
+    clearTimeout(stuckTimer);
+    pendingStuck = null;
     openSheet(
+      '<div class="alert-mark">✕</div>' +
       '<h1>No moves left</h1>' +
-      '<p>There is no legal move anywhere on the board — nothing to play, and nothing left in the stock.</p>' +
+      '<p>' + (hardFreeze
+        ? 'There is no legal move anywhere on the board.'
+        : 'Everything still legal just shuffles cards between piles — nothing left can turn a card over or reach a foundation.') +
+      '</p>' +
       '<button class="btn primary" id="dr">Try this deal again</button>' +
       '<button class="btn" id="dn">New game</button>' +
       (game.canUndo() ? '<button class="btn" id="du">Undo last move</button>' : '')
     );
+    sheet.classList.add('alert');
     sheet.querySelector('#dr').onclick = function () { closeSheet(); replayDeal(); };
     sheet.querySelector('#dn').onclick = function () { recordAbandon(); closeSheet(); showNewGameSheet(false); };
     var u = sheet.querySelector('#du');
     if (u) u.onclick = function () {
-      game.undo(); deadFlagged = false; closeSheet(); render();
+      game.undo(); deadFlagged = false; closeSheet(); render(); scheduleStuckCheck();
     };
   }
 
@@ -649,11 +694,18 @@
     game = new G.Game(dealState, { mode: m });
     hintPlan = null;
     deadFlagged = false;
+    clearTimeout(stuckTimer);
+    pendingStuck = null;
     autoRunning = false;
     clearHints();
     closeSheet();
     layout();
     render(true);
+    // Defensive: a game normally reaches a dead position through a move, and
+    // afterMove() schedules the check. Doing it here too means any other way
+    // in — Replay, a restored game — is covered as well. Costs nothing on a
+    // fresh deal, which always has an obviously progressing move.
+    scheduleStuckCheck();
   }
 
   /* A game you walk away from mid-play counts as a loss — otherwise the win
@@ -756,7 +808,7 @@
   btnUndo.onclick = function () {
     if (!game || autoRunning) return;
     clearHints();
-    if (game.undo()) { deadFlagged = false; render(); }
+    if (game.undo()) { deadFlagged = false; render(); scheduleStuckCheck(); }
   };
   btnNew.onclick = function () { if (!autoRunning) showNewGameSheet(false); };
   btnStats.onclick = function () { if (!autoRunning) showStats('all'); };

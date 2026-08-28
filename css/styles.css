@@ -227,6 +227,17 @@ html, body {
 }
 @keyframes rise { from { transform: translateY(14px); opacity: 0; } }
 .sheet h1 { margin: 0 0 4px; font-size: 21px; letter-spacing: -.01em; }
+
+/* The stuck banner. Deliberately louder than the other sheets: it is the one
+   message that ends a game, so it should not read like a tooltip. */
+.sheet.alert { border-top: 6px solid var(--rose); padding-top: 18px; }
+.sheet.alert h1 { font-size: 26px; color: var(--rose); margin-top: 6px; }
+.alert-mark {
+  width: 52px; height: 52px; margin: 0 auto 6px;
+  border-radius: 50%;
+  background: var(--rose-soft); color: var(--rose);
+  font-size: 26px; font-weight: 700; line-height: 52px;
+}
 .sheet h2 { margin: 18px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .09em; color: var(--ink-soft); }
 .sheet p  { margin: 6px 0 0; font-size: 14px; color: var(--ink-soft); line-height: 1.45; }
 
