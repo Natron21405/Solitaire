@@ -143,10 +143,32 @@ html, body {
 .card.red  .art { fill: var(--rose); color: var(--rose); }
 .card.black .art { fill: var(--sage); color: var(--sage); }
 
-/* Court figures: clothing and crowns are solid suit colour; face, beard, hair
-   and ruff are cream so they read as separate shapes against the robe. */
-.paper { fill: var(--cream); stroke: currentColor; stroke-width: 1.6; }
-.eye   { fill: currentColor; }
+/* Court figures (storybook busts). Suit colour drives clothing and the
+   portrait window; the rest are fixed pastel accents. */
+.card.red   .art { --c: var(--rose); --c-soft: var(--rose-soft); }
+.card.black .art { --c: var(--sage); --c-soft: var(--sage-soft); }
+.ct-m      { fill: var(--c); }
+.ct-s, .ct-s2 { fill: var(--c-soft); }
+.ct-win    { opacity: .45; }
+.ct-p      { fill: var(--cream); }
+.ct-sk     { fill: #f7dccb; }
+.ct-gd     { fill: #e8bd5f; }
+.ct-gdd    { fill: #c99a41; }
+.ct-ink    { fill: #4a3a40; }
+.ct-eyeln  { fill: none; stroke: #4a3a40; stroke-width: 1.5; stroke-linecap: round; }
+.ct-blush  { fill: #ef9fb0; opacity: .55; }
+.ct-mouth  { fill: none; stroke: #b4475d; stroke-width: 1.3; stroke-linecap: round; }
+.ct-beardc { fill: #f3eee6; }
+.ct-beardd { fill: #d9d0c3; }
+.ct-hairq  { fill: #8b5e4a; }
+.ct-hairj  { fill: #d4925a; }
+.ct-rose2  { fill: #e7788d; }
+.ct-roseln { fill: none; stroke: #a83f55; stroke-width: .8; }
+.ct-leaf   { fill: #74a98b; }
+.ct-plume  { fill: var(--c-soft); stroke: var(--c); stroke-width: .9; }
+.ct-plumeln { fill: none; stroke: var(--c); stroke-width: .8; }
+.ct-pearl  { stroke: #cfc3b2; stroke-width: .5; }
+.ct-ruff   { stroke: var(--c); stroke-width: .8; }
 .card.red  .bg, .card.black .bg { fill: var(--cream); stroke: var(--cream-edge); }
 
 .idx   { font: 800 25px/1 -apple-system, "Helvetica Neue", Arial, sans-serif; letter-spacing: -1.2px; }

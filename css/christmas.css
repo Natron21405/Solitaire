@@ -1,0 +1,181 @@
+/* =====================================================================
+   christmas.css — the secret Pastel Christmas theme.
+
+   Everything here is scoped under `html.xmas`, so until the theme is
+   unlocked (js/xmas.js) this file changes nothing at all. It only touches
+   colour and decoration: no sizes, positions or hit areas, so the board
+   plays exactly as it does in the pastel theme.
+   ===================================================================== */
+
+/* Christmas-only SVG pieces are hidden by default. */
+.xm { display: none; }
+html.xmas .xm { display: inline; }
+html.xmas .nx { display: none; }          /* everyday court figures step aside */
+
+/* Christmas court figures (storybook style; shared ct-* classes live in styles.css) */
+.ct-whair  { fill: #f6f2ec; stroke: #c9bfb1; stroke-width: .9; }
+.ct-nose   { fill: #e98f9d; }
+.ct-cookie { fill: #d9a66b; stroke: #b9854c; stroke-width: .6; }
+.ct-spec   { fill: none; stroke: #b08a46; stroke-width: 1.1; }
+
+/* ---------- palette ---------- */
+html.xmas {
+  --blue-bg:    #7ea3c4;   /* dusky winter-evening blue */
+  --blue-deep:  #5f86a9;
+  --cream:      #fffdfa;   /* fresh snow */
+  --cream-edge: #e6e1d8;
+
+  --rose:       #c8455c;   /* candy-cane red: hearts + diamonds */
+  --rose-soft:  #f7cbd4;
+  --sage:       #2f7358;   /* pine: spades + clubs */
+  --sage-soft:  #c6e9d7;
+
+  --mint:       #9fd9bf;
+  --gold:       #e7c27a;
+}
+
+html.xmas,
+html.xmas body { background: var(--blue-deep); }
+
+html.xmas #app {
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(172deg, #93b6d3 0%, var(--blue-bg) 42%, var(--blue-deep) 100%);
+}
+
+/* HUD, board and toolbar sit above the snow canvas. */
+html.xmas #hud, html.xmas #board, html.xmas #toolbar { position: relative; z-index: 1; }
+
+/* ---------- string of lights across the top ---------- */
+html.xmas #hud { padding-top: 16px; }
+html.xmas #hud::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 15px;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='15' viewBox='0 0 96 15'%3E%3Cpath d='M0 3 Q12 9 24 3 T48 3 T72 3 T96 3' fill='none' stroke='%233e6a5c' stroke-width='1.3'/%3E%3Cg%3E%3Crect x='10.5' y='4.6' width='3' height='2.4' rx='.6' fill='%23557a6d'/%3E%3Cellipse cx='12' cy='10' rx='2.7' ry='3.6' fill='%23f2a9b8'/%3E%3Crect x='34.5' y='4.6' width='3' height='2.4' rx='.6' fill='%23557a6d'/%3E%3Cellipse cx='36' cy='10' rx='2.7' ry='3.6' fill='%23fff1bf'/%3E%3Crect x='58.5' y='4.6' width='3' height='2.4' rx='.6' fill='%23557a6d'/%3E%3Cellipse cx='60' cy='10' rx='2.7' ry='3.6' fill='%23a6e3c7'/%3E%3Crect x='82.5' y='4.6' width='3' height='2.4' rx='.6' fill='%23557a6d'/%3E%3Cellipse cx='84' cy='10' rx='2.7' ry='3.6' fill='%23bcd8ff'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-size: 96px 15px;
+  animation: xm-twinkle 3.2s ease-in-out infinite;
+}
+@keyframes xm-twinkle { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.18) saturate(1.15); } }
+
+html.xmas #hud { color: #f3f8fc; text-shadow: 0 1px 2px rgba(30, 56, 80, .35); }
+html.xmas #hud b { color: #fff; }
+html.xmas #hud-mode { background: rgba(255,255,255,.85); color: var(--sage); text-shadow: none; }
+html.xmas #hud-mode.random { color: var(--rose); }
+
+/* ---------- empty slots: frosted ---------- */
+html.xmas .slot {
+  border-color: rgba(255, 255, 255, .55);
+  background: rgba(255, 255, 255, .16);
+  color: rgba(255, 255, 255, .8);
+}
+
+/* ---------- card faces ---------- */
+html.xmas .hl { fill: #3d8b6a; }
+html.xmas .hv { fill: none; stroke: #8fd1b0; stroke-width: 1.4; stroke-linecap: round; }
+html.xmas .hb { fill: #d8435a; }
+html.xmas .hs { fill: #fff; opacity: .7; }
+
+/* ---------- card backs: candy cane + holly ---------- */
+html.xmas .xb-bg   { fill: #fffdfa; }
+html.xmas .xb-red  { fill: #e0788a; }
+html.xmas .xb-mint { fill: var(--mint); }
+html.xmas .xb-medal { fill: #fffdfa; }
+html.xmas .xb-ring  { fill: none; stroke: var(--mint); stroke-width: 2.2; stroke-dasharray: 3 3; }
+
+/* ---------- toolbar: a drift of snow along its top edge ---------- */
+html.xmas #toolbar {
+  background: rgba(255, 255, 255, .62);
+  border-top-color: rgba(255, 255, 255, .95);
+}
+html.xmas #toolbar::before {
+  content: ""; position: absolute; left: 0; right: 0; top: -9px; height: 10px;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='10' viewBox='0 0 120 10'%3E%3Cpath d='M0 10 V6 Q8 1 18 5 Q27 9 36 4 Q46 0 57 5 Q66 8 76 3 Q87 0 98 5 Q109 9 120 6 V10z' fill='%23ffffff' fill-opacity='.9'/%3E%3C/svg%3E");
+  background-repeat: repeat-x; background-size: 120px 10px;
+}
+html.xmas #toolbar button .ic { color: var(--rose); }
+html.xmas #btn-new   .ic, html.xmas #btn-hint .ic { color: var(--sage); }
+html.xmas #toolbar button.accent { background: var(--rose); box-shadow: 0 2px 10px rgba(200,69,92,.4); }
+html.xmas #toolbar button.accent .ic { color: #fff; }
+
+/* ---------- sheets ---------- */
+html.xmas #overlay { background: rgba(40, 66, 92, .40); }
+/* candy-cane ribbon across the top of every sheet (a background, so the
+   rounded corners clip it — border-image would ignore border-radius) */
+html.xmas .sheet {
+  background:
+    repeating-linear-gradient(135deg, var(--rose) 0 9px, #fff 9px 17px, var(--mint) 17px 21px, #fff 21px 29px)
+      top / 100% 7px no-repeat,
+    var(--cream);
+  padding-top: 26px;
+}
+html.xmas .sheet.alert { background: var(--cream); padding-top: 18px; }
+
+/* ---------- snow ---------- */
+#xm-snow {
+  position: absolute; inset: 0; z-index: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+
+/* =====================================================================
+   The gift (shown on the win sheet before the theme is unlocked).
+   These rules are NOT scoped to .xmas — the gift appears in pastel.
+   ===================================================================== */
+.xm-gift {
+  margin: 16px 0 2px; padding: 12px 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fff6f8 0%, #f1fbf6 100%);
+  border: 2px dashed #efc3cd;
+}
+.xm-gift p { margin: 0 0 6px; font-size: 13.5px; color: #8a5866; font-style: italic; }
+.xm-gift-btn {
+  display: block; margin: 0 auto; padding: 0; border: 0; background: none; cursor: pointer;
+  width: 92px; height: 92px;
+  animation: xm-wiggle 2.4s ease-in-out infinite;
+  -webkit-tap-highlight-color: transparent;
+}
+.xm-gift-btn svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.xm-gift-btn .lid { transform-box: fill-box; transform-origin: 50% 100%; }
+.xm-gift-hint { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #b07a87; margin-top: 2px; }
+
+@keyframes xm-wiggle {
+  0%, 70%, 100% { transform: rotate(0); }
+  74% { transform: rotate(-7deg); } 78% { transform: rotate(6deg); }
+  82% { transform: rotate(-4deg); } 86% { transform: rotate(2deg); }
+}
+
+/* opening */
+.xm-gift-btn.open { animation: none; }
+.xm-gift-btn.open .lid { animation: xm-lid .7s cubic-bezier(.3, .7, .3, 1) forwards; }
+.xm-gift-btn.open .glow { animation: xm-glow .7s ease-out forwards; }
+@keyframes xm-lid {
+  0%   { transform: translateY(0) rotate(0); }
+  40%  { transform: translateY(-26px) rotate(-14deg); }
+  100% { transform: translateY(-60px) translateX(-30px) rotate(-38deg); opacity: 0; }
+}
+@keyframes xm-glow { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: scale(1.4); } }
+.xm-gift-btn .glow { opacity: 0; transform-box: fill-box; transform-origin: 50% 50%; }
+
+/* The burst that sweeps the new theme in: a snow-white circle grows out of
+   the gift until it covers the screen, the theme flips underneath it, and
+   it fades away. */
+#xm-burst {
+  position: fixed; inset: 0; z-index: 9800; pointer-events: none;
+  background: radial-gradient(circle at var(--bx, 50%) var(--by, 50%), #ffffff 0%, #fff5f7 45%, #eaf8f1 100%);
+  clip-path: circle(0px at var(--bx, 50%) var(--by, 50%));
+  opacity: 1;
+}
+#xm-burst.grow { transition: clip-path .75s cubic-bezier(.55, 0, .35, 1); clip-path: circle(150vmax at var(--bx, 50%) var(--by, 50%)); }
+#xm-burst.fade { transition: opacity .9s ease; opacity: 0; }
+
+.sheet .xm-merry { font-size: 25px; color: var(--rose); margin-top: 4px; }
+
+/* theme switch in Statistics (only rendered once unlocked) */
+.xm-theme { margin-top: 14px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .xm-gift-btn, html.xmas #hud::before { animation: none; }
+}
+

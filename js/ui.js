@@ -6,6 +6,7 @@
 
   var S = window.KSolver, D = window.KDeal, G = window.KGame, ST = window.KStats;
   var ART = window.KCardArt;
+  var XM = window.KXmas;          // secret Christmas theme — cosmetic only
   var RANK = S.RANK, SUIT = S.SUIT;
 
   var SUIT_CH = ['♠', '♥', '♣', '♦'];       // S H C D
@@ -640,13 +641,15 @@
         '<button data-w="random" class="' + (which === 'random' ? 'sel' : '') + '">Random</button>' +
       '</div>' +
       statRow(d[which]) +
+      (XM ? XM.themeSwitchHTML() : '') +
       '<p class="tiny">Started ' + (d.firstPlayed ? new Date(d.firstPlayed).toLocaleDateString() : '—') + '</p>' +
       '<button class="btn primary" id="close">Done</button>' +
       '<button class="btn" id="reset">Reset statistics</button>'
     );
-    sheet.querySelectorAll('.seg button').forEach(function (b) {
+    sheet.querySelectorAll('.seg button[data-w]').forEach(function (b) {
       b.onclick = function () { showStats(b.dataset.w); };
     });
+    if (XM) XM.wireThemeSwitch(sheet);
     sheet.querySelector('#close').onclick = closeSheet;
     sheet.querySelector('#reset').onclick = function () {
       openSheet('<h1>Reset statistics?</h1><p>Every lifetime figure goes back to zero. This cannot be undone.</p>' +
@@ -729,11 +732,23 @@
       '<div class="stat-grid" style="margin-top:14px">' +
         st('Streak', b.currentStreak) + st('Win rate', Math.round(100 * b.won / b.played) + '%') +
       '</div>' +
+      (XM && !XM.isUnlocked() ? XM.giftHTML() : '') +
       '<button class="btn primary" id="again">Deal another</button>' +
       '<button class="btn" id="stats">Statistics</button>'
     );
     sheet.querySelector('#again').onclick = function () { startNewGame(); };
     sheet.querySelector('#stats').onclick = function () { showStats('all'); };
+    if (XM) XM.wireGift(sheet, showMerry);
+  }
+
+  /* Shown once, the moment the present is opened. */
+  function showMerry() {
+    openSheet(
+      '<h1 class="xm-merry">Merry Christmas</h1>' +
+      '<p>Your solitaire is dressed for the season. You can switch back to pastel any time from Statistics.</p>' +
+      '<button class="btn primary" id="again">Deal another</button>'
+    );
+    sheet.querySelector('#again').onclick = function () { startNewGame(); };
   }
 
   function runAutocomplete() {
@@ -855,7 +870,8 @@
     begin: begin, render: render, autocomplete: runAutocomplete,
     greedyFinish: greedyFinish, replay: replayDeal, requestHint: requestHint,
     hintFor: function () { return hintPlan ? hintPlan[S.stateKey(game.s)] : null; },
-    isAuto: function () { return autoRunning; }
+    isAuto: function () { return autoRunning; },
+    finish: function () { finish(true); }
   };
 
   if ('serviceWorker' in navigator) {

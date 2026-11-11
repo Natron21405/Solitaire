@@ -16,6 +16,9 @@
 <link rel="icon" href="icons/icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/christmas.css">
+<script>/* apply a saved theme before first paint, so a relaunch never flashes */
+try{var x=JSON.parse(localStorage.getItem('pastel-solitaire-xmas')||'{}');if(x.unlocked&&x.on)document.documentElement.classList.add('xmas');}catch(e){}</script>
 </head>
 <body>
 
@@ -46,6 +49,7 @@
 <script src="js/deal.js"></script>
 <script src="js/game.js"></script>
 <script src="js/stats.js"></script>
+<script src="js/xmas.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>

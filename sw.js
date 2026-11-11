@@ -1,9 +1,9 @@
 /* sw.js — cache-first service worker so the game works with no signal. */
-const CACHE = 'pastel-solitaire-v2';
+const CACHE = 'pastel-solitaire-v3';
 const ASSETS = [
-  './', './index.html', './css/styles.css',
+  './', './index.html', './css/styles.css', './css/christmas.css',
   './js/cardart.js', './js/solver.js', './js/deal.js', './js/game.js', './js/stats.js',
-  './js/ui.js', './js/worker.js',
+  './js/xmas.js', './js/ui.js', './js/worker.js',
   './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png',
   './icons/icon-512-maskable.png', './icons/apple-touch-icon.png'
